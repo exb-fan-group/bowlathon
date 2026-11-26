@@ -1,0 +1,10 @@
+package-lock.json
+backend/generated/
+backend/prisma/migrations/
+dist/
+
+# Prisma's AI skills, vendored as-is by `prisma init`
+backend/.agents/
+backend/.claude/
+backend/.windsurf/
+backend/skills-lock.json

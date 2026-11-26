@@ -1,0 +1,2 @@
+# LF everywhere: Windows checkouts with core.autocrlf would otherwise get CRLF and fail the Prettier check.
+* text=auto eol=lf

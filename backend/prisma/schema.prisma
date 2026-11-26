@@ -1,0 +1,189 @@
+// Tables are plural and snake_case: `user` and `group` are reserved words in Postgres.
+// Design notes: docs/architecture.md#data-model
+
+generator client {
+  provider               = "prisma-client"
+  output                 = "../generated/prisma"
+  runtime                = "nodejs"
+  moduleFormat           = "esm"
+  generatedFileExtension = "ts"
+  importFileExtension    = "ts"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  admin
+  member
+
+  @@map("role")
+}
+
+enum SessionStatus {
+  open
+  locked
+  ended
+
+  @@map("session_status")
+}
+
+enum GameMode {
+  frames
+  total
+
+  @@map("game_mode")
+}
+
+model User {
+  id           Int       @id @default(autoincrement())
+  /// Stored lowercase, so uniqueness ignores case.
+  username     String    @unique
+  passwordHash String    @map("password_hash")
+  role         Role      @default(member)
+  createdAt    DateTime  @default(now()) @map("created_at")
+  player       Player?
+  ownedCrews   Crew[]
+  hostedSessions Session[]
+  authTokens   AuthToken[]
+
+  @@map("users")
+}
+
+/// Anyone on a scoresheet. A guest has no user.
+model Player {
+  id             Int             @id @default(autoincrement())
+  name           String
+  userId         Int?            @unique @map("user_id")
+  user           User?           @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdAt      DateTime        @default(now()) @map("created_at")
+  crews          CrewMember[]
+  sessionPlayers SessionPlayer[]
+  edits          GameEdit[]
+  authTokens     AuthToken[]
+
+  @@map("players")
+}
+
+model Crew {
+  id          Int          @id @default(autoincrement())
+  name        String
+  ownerUserId Int          @map("owner_user_id")
+  owner       User         @relation(fields: [ownerUserId], references: [id])
+  createdAt   DateTime     @default(now()) @map("created_at")
+  members     CrewMember[]
+  sessions    Session[]
+
+  @@map("crews")
+}
+
+model CrewMember {
+  crewId   Int    @map("crew_id")
+  playerId Int    @map("player_id")
+  crew     Crew   @relation(fields: [crewId], references: [id], onDelete: Cascade)
+  player   Player @relation(fields: [playerId], references: [id], onDelete: Cascade)
+
+  @@id([crewId, playerId])
+  @@map("crew_members")
+}
+
+/// One bowling night. No crew means a one-off night.
+model Session {
+  id             Int             @id @default(autoincrement())
+  crewId         Int?            @map("crew_id")
+  crew           Crew?           @relation(fields: [crewId], references: [id], onDelete: SetNull)
+  hostUserId     Int             @map("host_user_id")
+  host           User            @relation(fields: [hostUserId], references: [id])
+  /// Cleared when the session ends.
+  joinCode       String?         @unique @map("join_code")
+  status         SessionStatus   @default(open)
+  anyoneCanEdit  Boolean         @default(true) @map("anyone_can_edit")
+  startedAt      DateTime        @default(now()) @map("started_at")
+  endedAt        DateTime?       @map("ended_at")
+  lastActivityAt DateTime        @default(now()) @map("last_activity_at")
+  teams          Team[]
+  players        SessionPlayer[]
+  authTokens     AuthToken[]
+
+  @@map("sessions")
+}
+
+model Team {
+  id        Int             @id @default(autoincrement())
+  sessionId Int             @map("session_id")
+  session   Session         @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  name      String
+  sortOrder Int             @map("sort_order")
+  players   SessionPlayer[]
+
+  @@map("teams")
+}
+
+model SessionPlayer {
+  sessionId Int     @map("session_id")
+  playerId  Int     @map("player_id")
+  teamId    Int?    @map("team_id")
+  bowlOrder Int     @map("bowl_order")
+  session   Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  player    Player  @relation(fields: [playerId], references: [id])
+  team      Team?   @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  games     Game[]
+
+  @@id([sessionId, playerId])
+  @@index([playerId])
+  @@map("session_players")
+}
+
+model Game {
+  id            Int           @id @default(autoincrement())
+  sessionId     Int           @map("session_id")
+  playerId      Int           @map("player_id")
+  sessionPlayer SessionPlayer @relation(fields: [sessionId, playerId], references: [sessionId, playerId], onDelete: Cascade)
+  gameNo        Int           @map("game_no")
+  mode          GameMode
+  /// Pins per roll. The source of truth in `frames` mode.
+  rolls         Int[]         @default([])
+  /// Computed by the server from `rolls` in `frames` mode, typed in `total` mode.
+  score         Int           @default(0)
+  complete      Boolean       @default(false)
+  /// Optimistic concurrency: every save must send the version it started from.
+  version       Int           @default(1)
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+  edits         GameEdit[]
+
+  @@unique([sessionId, playerId, gameNo])
+  @@index([playerId])
+  @@map("games")
+}
+
+/// One row per successful save.
+model GameEdit {
+  id         Int      @id @default(autoincrement())
+  gameId     Int      @map("game_id")
+  game       Game     @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  version    Int
+  rolls      Int[]
+  score      Int
+  editedById Int?     @map("edited_by")
+  editedBy   Player?  @relation(fields: [editedById], references: [id], onDelete: SetNull)
+  editedAt   DateTime @default(now()) @map("edited_at")
+
+  @@index([gameId])
+  @@map("game_edits")
+}
+
+/// Logins (user set) and guest seats (session and player set). Deleting a row revokes it.
+model AuthToken {
+  tokenHash String   @id @map("token_hash")
+  userId    Int?     @map("user_id")
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessionId Int?     @map("session_id")
+  session   Session? @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  playerId  Int?     @map("player_id")
+  player    Player?  @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("auth_tokens")
+}
