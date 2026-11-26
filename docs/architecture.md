@@ -21,15 +21,7 @@ Web app for our friend group to record bowling scores, run team nights like 2v2v
 
 ## Scope
 
-**v1**
-
-1. Public sign-up and login, admin password reset.
-2. Crews with a roster of accounts and guests.
-3. Sessions: join code, seats, teams, bowling order, edit toggle, lock, end, auto-end.
-4. Frame-by-frame keypad entry, a final-score-only fallback, several games per night.
-5. Server-side scoring, per-game version check, pending-save outbox, edit history, polling.
-6. Session scoreboard with team totals and series. Crew history and leaderboard (average, high game, games played).
-7. Running on the homelab.
+**v1:** tracked as issues in the [v1 milestone](https://github.com/exb-fan-group/bowlathon/milestone/1).
 
 **v1.1:** live updates (SSE), claiming guest history, an edit history view, automatic deploys.
 
