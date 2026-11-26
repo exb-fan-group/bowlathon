@@ -4,7 +4,10 @@ Setup is in the [README](README.md).
 
 ## Branches and pull requests
 
+- Work is tracked in [GitHub Issues](https://github.com/exb-fan-group/bowlathon/issues). Assign yourself before starting; each issue's "Depends on" line says what has to land first.
 - Branch off `main` as `feat/<thing>` or `fix/<thing>`.
+- Put `Closes #<issue>` in the PR so merging closes the issue.
+- Merge with **Squash and merge**.
 - `main` takes PRs only, with 1 approval from someone else and CI passing.
 - Run `npm run format` and `npm run lint` before pushing. VS Code formats on save once the recommended extensions are installed.
 
